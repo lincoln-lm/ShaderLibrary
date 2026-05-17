@@ -172,9 +172,10 @@ namespace ShaderLibrary.Switch
             option.Name = reader.LoadString();
             option.Choices = LoadDictionary(reader, reader.ReadUInt64(), 0, ReadResUint);
             var choiceValuesOffset = reader.ReadUInt64();
-            ushort choiceCount = reader.ReadUInt16();
+            ushort choiceCount = 0;
             if (reader.Header.VersionMajor >= 9)
             {
+                choiceCount = reader.ReadUInt16();
                 option.DefaultChoiceIdx = reader.ReadInt16();
                 option.Padding = reader.ReadUInt16();
                 option.BlockOffset = reader.ReadByte();
@@ -186,7 +187,9 @@ namespace ShaderLibrary.Switch
             }
             else
             {
+                choiceCount = reader.ReadByte();
                 option.DefaultChoiceIdx = reader.ReadByte();
+                option.Padding = reader.ReadByte();
                 option.BlockOffset = reader.ReadUInt16(); // Uniform block offset.
                 option.KeyOffset = reader.ReadByte();
                 option.Bit32Index = reader.ReadByte();

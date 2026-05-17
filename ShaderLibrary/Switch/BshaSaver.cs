@@ -175,10 +175,10 @@ namespace ShaderLibrary
                     op._choiceDictOfsPos = writer.SaveOffset();
                     op._choiceValuesOfsPos = writer.SaveOffset();
 
-                    writer.Write((ushort)op.Choices.Count);
 
                     if (bfsha.BinHeader.VersionMajor >= 9)
                     {
+                        writer.Write((ushort)op.Choices.Count);
                         writer.Write((ushort)op.DefaultChoiceIdx);
                         writer.Write((ushort)0);
 
@@ -193,13 +193,13 @@ namespace ShaderLibrary
                     }
                     else
                     {
-                        writer.Write((ushort)op.BlockOffset);
-
+                        writer.Write((byte)op.Choices.Count);
                         writer.Write((byte)op.DefaultChoiceIdx);
+                        writer.Write((byte)op.Padding);
+                        writer.Write((ushort)op.BlockOffset);
                         writer.Write((byte)op.KeyOffset);
                         writer.Write((byte)op.Bit32Index);
                         writer.Write((byte)op.Bit32Shift);
-
                         writer.Write(op.Bit32Mask);
                         writer.Write(0); //padding
                     }
