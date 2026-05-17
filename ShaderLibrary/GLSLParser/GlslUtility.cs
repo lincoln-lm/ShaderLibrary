@@ -97,9 +97,6 @@ namespace ShaderLibrary
                         if (macroNew == "1") macroNew = "true";
                         if (macroNew == "0") macroNew = "false";
                     }
-
-                    Console.WriteLine($"{macroValue} -> {macroNew}");
-
                     // Updated macro value in shader code
                     writer.WriteLine(string.Format("#define {0} {1}", macroName, macroNew));
                 }

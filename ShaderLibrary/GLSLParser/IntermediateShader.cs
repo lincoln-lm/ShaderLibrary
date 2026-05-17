@@ -1,4 +1,5 @@
-﻿using ShaderLibrary.Common;
+﻿using Microsoft.VisualBasic.FileIO;
+using ShaderLibrary.Common;
 using ShaderLibrary.Helpers;
 using ShaderLibrary.WiiU;
 using System;
@@ -385,6 +386,14 @@ namespace ShaderLibrary
                 storageBlockLookup = StorageBlocks.ToDictionary(s => s.ID, s => s.Symbol);
             }
 
+            public string GetSkinningMacro()
+            {
+                // Pick the first option macro that has skin count, not always a dynamic variation
+                return StaticOptions.FirstOrDefault(x => x.IsSkinCount)?.ID
+                 ?? DynamicOptions.FirstOrDefault(x => x.IsSkinCount)?.ID
+                 ?? "gsys_weight";
+            }
+
             private static string Lookup(Dictionary<string, string> dict, string key)
                 => dict.TryGetValue(key, out var value) ? value : key;
             private static string LookupReverse(Dictionary<string, string> dict, string value)
@@ -459,6 +468,20 @@ namespace ShaderLibrary
             [XmlAttribute("skin_count_type")]
             [DefaultValue(false)]
             public bool IsSkinCount { get; set; }
+
+
+            [XmlAttribute("render_info")]
+            [DefaultValue(false)]
+            public string RenderInfo { get; set; }
+
+            public Dictionary<string, string> RenderInfoChoices { get; set; } = new();
+
+            public string GetMacroChoiceByRenderInfo(string choice)
+            {
+                if (this.RenderInfoChoices.ContainsKey(choice))
+                    return this.RenderInfoChoices[choice];
+                return choice;
+            }
 
             public string GetMacroChoice() => GetMacroChoice(DefaultChoice);
 

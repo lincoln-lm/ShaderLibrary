@@ -267,6 +267,10 @@ namespace ShaderLibrary
                 //options must be in int form, so ensure booleans are converted
                 string GetChoiceValue(string v)
                 {
+                    // : can split a label and value
+                    if (v.Contains(":"))
+                        v = v.Split(":").LastOrDefault();
+
                     if (v == "false") return "0";
                     else if (v == "true") return "1";
                     return v;
@@ -284,10 +288,12 @@ namespace ShaderLibrary
                 else
                     choices.Add(GetChoiceValue(value));
 
+                Dictionary<string, string> render_info_choices = new();
                 bool compile_all = false;
                 bool is_static = true;
                 bool is_skin_count = false;
                 string desc = "";
+                string render_info = "";
                 if (!string.IsNullOrEmpty(macroProperties))
                 {
                     var macroPropertyMatches = Regex.Matches(macroProperties, @"(?<property>\w+)\s*=\s*""(?<value>[^""]+)""");
@@ -300,6 +306,7 @@ namespace ShaderLibrary
                         {
                             case "branch": is_static = valueProp != "dynamic"; break;
                             case "desc": desc = valueProp; break;
+                            case "render_info": render_info = valueProp; break;
                             case "flags": compile_all = valueProp.Contains("compile_all_coices"); break;
                             case "id": name = valueProp; break;
                             case "order": int.TryParse(valueProp, out order); break;
@@ -311,7 +318,16 @@ namespace ShaderLibrary
                             case "choices":
                                 choices.Clear();
                                 foreach (var v in valueProp.Split(new[] { ",", " " }, StringSplitOptions.RemoveEmptyEntries))
+                                {
                                     choices.Add(GetChoiceValue(v));
+                                    if (v.Contains(":"))
+                                    {
+                                        string[] values = v.Trim().Split(":");
+                                        string renderInfoValue = values[0];
+                                        string macroValue = values[1];
+                                        render_info_choices.TryAdd(renderInfoValue, macroValue);
+                                    }
+                                }
 
                                 //slight hack atm
                                 if (!valueProp.Contains(value))
@@ -336,6 +352,17 @@ namespace ShaderLibrary
                 option.Type = type;
                 option.Group = group;
                 option.IsSkinCount = is_skin_count;
+                option.RenderInfo = render_info;
+                if (!string.IsNullOrEmpty(render_info))
+                {
+                    // If option is a render info, then we do render info string value -> macro value
+                    if ((value == "false" || value == "true") && render_info_choices.Count == 0)
+                    {
+                        render_info_choices.Add("false", "0");
+                        render_info_choices.Add("true", "1");
+                    }
+                    option.RenderInfoChoices = render_info_choices;
+                }
 
                 if (is_static)
                     this.StaticOptions.Add(name, option);
