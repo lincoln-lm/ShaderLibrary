@@ -79,8 +79,8 @@ namespace ShaderLibrary
             RegexOptions.Compiled);
 
         private static readonly Regex MacrosRegex = new Regex(
-        @"#define\s+(?<name>\w+)\s+(?<value>\w+)\s*\/\/@\s*(?<macroProperties>(\w+\s*=\s*""[^""]+""\s*)*)(?:\s*flags\s*=\s*""(?<flags>[^""]+)""\s*)?",
-       RegexOptions.Compiled);
+            @"#define\s+(?<name>\w+)\s+(?<value>.+?)\s*\/\/@\s*(?<macroProperties>(\w+\s*=\s*""[^""]+""\s*)*)(?:flags\s*=\s*""(?<flags>[^""]+)"")?",
+            RegexOptions.Compiled);
 
         private static readonly Regex StorageBufferRegex = new Regex(
             @"layout\s*\(\s*(?<layout>[^\)]+)\)\s*buffer\s+(?<blockName>\w+)\s*(\/\/@\s*(?<blockProperties>(\w+\s*=\s*""[^""]+""\s*)+))?\s*\{(?<blockContent>(.|\n)*?)\}\s*\w*\s*;",
