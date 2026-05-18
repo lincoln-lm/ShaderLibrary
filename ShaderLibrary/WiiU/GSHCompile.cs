@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace ShaderLibrary.WiiU
@@ -22,6 +23,22 @@ namespace ShaderLibrary.WiiU
             return File.Exists(GSH_PATH);
         }
 
+        static string PrepareCode(string code)
+        {
+            if (string.IsNullOrEmpty(code))
+                return code;
+
+            // Remove the version
+            code = Regex.Replace(code,
+                @"^\s*#version.*$\r?\n?", "",
+                RegexOptions.Multiline | RegexOptions.IgnoreCase);
+
+            // Add necessary values and extensions
+            return "#version 330 core\r\n" +
+                    "#extension GL_EXT_Cafe : enable\r\n" +
+                    "#extension GL_ARB_texture_cube_map_array : enable" + code;
+        }
+
         public static byte[] CompileStages(string vertex, string fragment, string geometry) 
         {
             string vsh_path = "temp.vert";
@@ -29,6 +46,10 @@ namespace ShaderLibrary.WiiU
             string gsh_path = "temp.geom";
 
             if (File.Exists(OUTPUT_PATH)) File.Delete(OUTPUT_PATH);
+
+            vertex = PrepareCode(vertex);
+            fragment = PrepareCode(fragment);
+            geometry = PrepareCode(geometry);
 
             //save shader
             File.WriteAllText(vsh_path, vertex);
@@ -75,8 +96,6 @@ namespace ShaderLibrary.WiiU
 
         private static bool Exec(string exec, string args)
         {
-            Console.WriteLine(args);
-
             var info = new ProcessStartInfo
             {
                 FileName = exec,
@@ -97,7 +116,12 @@ namespace ShaderLibrary.WiiU
             cmd.ErrorDataReceived += (sender, e) =>
             {
                 if (!string.IsNullOrEmpty(e.Data))
+                {
+                    Console.WriteLine($"");
+                    Console.ForegroundColor = ConsoleColor.Red;
                     Console.WriteLine($"Error: {e.Data}");
+                    Console.ResetColor();
+                }
             };
             cmd.Start();
 

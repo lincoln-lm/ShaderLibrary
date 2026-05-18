@@ -474,6 +474,10 @@ namespace ShaderLibrary
             [DefaultValue(false)]
             public string RenderInfo { get; set; }
 
+            [XmlAttribute("render_state_property")]
+            [DefaultValue(false)]
+            public string RenderStatePropertyWiiU { get; set; }
+
             public Dictionary<string, string> RenderInfoChoices { get; set; } = new();
 
             public string GetMacroChoiceByRenderInfo(string choice)

@@ -294,6 +294,7 @@ namespace ShaderLibrary
                 bool is_skin_count = false;
                 string desc = "";
                 string render_info = "";
+                string render_state = "";
                 if (!string.IsNullOrEmpty(macroProperties))
                 {
                     var macroPropertyMatches = Regex.Matches(macroProperties, @"(?<property>\w+)\s*=\s*""(?<value>[^""]+)""");
@@ -307,6 +308,7 @@ namespace ShaderLibrary
                             case "branch": is_static = valueProp != "dynamic"; break;
                             case "desc": desc = valueProp; break;
                             case "render_info": render_info = valueProp; break;
+                            case "render_state_property": render_state = valueProp; break;
                             case "flags": compile_all = valueProp.Contains("compile_all_coices"); break;
                             case "id": name = valueProp; break;
                             case "order": int.TryParse(valueProp, out order); break;
@@ -353,6 +355,7 @@ namespace ShaderLibrary
                 option.Group = group;
                 option.IsSkinCount = is_skin_count;
                 option.RenderInfo = render_info;
+                option.RenderStatePropertyWiiU = render_state;
                 if (!string.IsNullOrEmpty(render_info))
                 {
                     // If option is a render info, then we do render info string value -> macro value
