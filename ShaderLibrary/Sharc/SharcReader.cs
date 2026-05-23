@@ -70,35 +70,26 @@ namespace ShaderLibrary.Sharc
             }
 
             program.Name = reader.ReadFixedString((int)nameLength);
-            program.VertexMacros = ReadSection(reader, sharc, ReadMacroDefinesList);
-            program.FragmentMacros = ReadSection(reader, sharc, ReadMacroDefinesList);
-            program.GeometryMacros = ReadSection(reader, sharc, ReadMacroDefinesList);
+            program.VertexMacros = ReadSectionList(reader, sharc, ReadMacroDefine);
+            program.FragmentMacros = ReadSectionList(reader, sharc, ReadMacroDefine);
+            program.GeometryMacros = ReadSectionList(reader, sharc, ReadMacroDefine);
             if (sharc.FileHeader.Version >= 13)
-                program.ComputeMacros = ReadSection(reader, sharc, ReadMacroDefinesList);
+                program.ComputeMacros = ReadSectionList(reader, sharc, ReadMacroDefine);
 
-            program.VariationMacros = ReadSection(reader, sharc, ReadMacroList);
-            program.VariationDefaults = ReadSection(reader, sharc, ReadMacroList);
+            program.VariationMacros = ReadSectionList(reader, sharc, ReadVariationMacro);
+            program.VariationDefaults = ReadSectionList(reader, sharc, ReadVariationMacro);
             if (sharc.FileHeader.Version >= 13)
             {
-                program.UniformBlocksV13 = ReadSection(reader, sharc, ReadBlockList);
+                program.UniformBlocksV13 = ReadSectionList(reader, sharc, ReadBlockSymbol);
             }
             else
             {
-                program.Uniforms = ReadSection(reader, sharc, ReadSymbolList);
-                program.UniformBlocks = ReadSection(reader, sharc, ReadSymbolList);
-                program.Samplers = ReadSection(reader, sharc, ReadSymbolList);
-                program.Attributes = ReadSection(reader, sharc, ReadSymbolList);
+                program.Uniforms = ReadSectionList(reader, sharc, ReadSymbol);
+                program.UniformBlocks = ReadSectionList(reader, sharc, ReadSymbol);
+                program.Samplers = ReadSectionList(reader, sharc, ReadSymbol);
+                program.Attributes = ReadSectionList(reader, sharc, ReadSymbol);
             }
             return program;
-        }
-
-        static List<MacroDefine> ReadMacroDefinesList(BinaryDataReader reader, SharcFile sharc)
-        {
-            List<MacroDefine> macroList = new();
-            uint count = reader.ReadUInt32();
-            for (int i = 0; i < count; i++)
-                macroList.Add(ReadSection(reader, sharc, ReadMacroDefine));
-            return macroList;
         }
 
         static MacroDefine ReadMacroDefine(BinaryDataReader reader, SharcFile sharc)
@@ -111,16 +102,7 @@ namespace ShaderLibrary.Sharc
             return var;
         }
 
-        static List<VariationMacro> ReadMacroList(BinaryDataReader reader, SharcFile sharc)
-        {
-            List<VariationMacro> macroList = new();
-            uint count = reader.ReadUInt32();
-            for (int i = 0; i < count; i++)
-                macroList.Add(ReadSection(reader, sharc, ReadMacro));
-            return macroList;
-        }
-
-        static VariationMacro ReadMacro(BinaryDataReader reader, SharcFile sharc)
+        static VariationMacro ReadVariationMacro(BinaryDataReader reader, SharcFile sharc)
         {
             VariationMacro var = new();
             uint nameLength = reader.ReadUInt32();
@@ -131,27 +113,6 @@ namespace ShaderLibrary.Sharc
                 var.Values.Add(reader.ReadZeroTerminatedString());
             var.Data = reader.ReadBytes((int)dataLength); // 0
             return var;
-        }
-
-        static List<Symbol> ReadSymbolList(BinaryDataReader reader, SharcFile sharc)
-        {
-            List<Symbol> macroList = new();
-            uint count = reader.ReadUInt32();
-            for (int i = 0; i < count; i++)
-                macroList.Add(ReadSection(reader, sharc, ReadSymbol));
-            return macroList;
-        }
-
-        static List<SymbolUniformBlock> ReadBlockList(BinaryDataReader reader, SharcFile sharc)
-        {
-            List<SymbolUniformBlock> macroList = new();
-            uint count = reader.ReadUInt32();
-            for (int i = 0; i < count; i++)
-                macroList.Add(ReadSection(reader, sharc, ReadBlockSymbol));
-            for (int i = 0; i < count; i++)
-                macroList[i].Location = i;
-
-            return macroList;
         }
 
         static SymbolUniformBlock ReadBlockSymbol(BinaryDataReader reader, SharcFile sharc)
@@ -190,11 +151,20 @@ namespace ShaderLibrary.Sharc
             return var;
         }
 
-        static T ReadSection<T>(BinaryDataReader reader, SharcFile sharc, Func<BinaryDataReader, SharcFile, T> section)
+        static List<T> ReadSectionList<T>(BinaryDataReader reader, SharcFile sharc, Func<BinaryDataReader, SharcFile, T> sectionReader)
+        {
+            var list = new List<T>();
+            uint count = reader.ReadUInt32();
+            for (int i = 0; i < count; i++)
+                list.Add(ReadSection(reader, sharc, sectionReader));
+            return list;
+        }
+
+        static T ReadSection<T>(BinaryDataReader reader, SharcFile sharc, Func<BinaryDataReader, SharcFile, T> sectionReader)
         {
             long start = reader.Position;
             var sectionSize = reader.ReadUInt32();
-            T value = section.Invoke(reader, sharc);
+            T value = sectionReader.Invoke(reader, sharc);
 
             reader.SeekBegin(start + sectionSize);
             return value;

@@ -131,9 +131,8 @@ namespace ShaderBuilderTool
                 if (!string.IsNullOrEmpty(e.Data))
                 {
                     Console.WriteLine($"");
-                    if (e.Data.StartsWith("warning:"))
+                    if (e.Data.Contains("warning:"))
                         Console.ForegroundColor = ConsoleColor.Yellow;
-
                     else
                         Console.ForegroundColor = ConsoleColor.Red;
                     Console.WriteLine($"{e.Data}");
