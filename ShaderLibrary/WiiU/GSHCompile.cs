@@ -162,6 +162,8 @@ namespace ShaderLibrary.WiiU
 
         public static string CompileMacros(Dictionary<string, string> macros, string src)
         {
+            if (string.IsNullOrEmpty(src)) return "";
+
             var sb = new System.Text.StringBuilder();
             using (var writer = new System.IO.StringWriter(sb))
             {

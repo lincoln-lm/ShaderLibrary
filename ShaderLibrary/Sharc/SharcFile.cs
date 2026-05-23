@@ -74,10 +74,10 @@ namespace ShaderLibrary
 
             public List<SymbolUniformBlock> UniformBlocksV13 = new List<SymbolUniformBlock>();
 
-            public int VertexShaderIndex;
-            public int FragmentShaderIndex;
-            public int GeoemetryShaderIndex;
-            public int ComputeShaderIndex;
+            public int VertexShaderIndex = -1;
+            public int FragmentShaderIndex = -1;
+            public int GeoemetryShaderIndex = -1;
+            public int ComputeShaderIndex = -1;
 
             public int GetVariationIndex(Dictionary<string, string> options)
                 => SharcUtils.GetVariationIndex(this.VariationMacros, options);

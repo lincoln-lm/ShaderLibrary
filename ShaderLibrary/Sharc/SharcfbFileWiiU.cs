@@ -27,7 +27,7 @@ namespace ShaderLibrary
         public class ShaderProgram
         {
             public string Name;
-            public uint Kind;
+            public uint Kind = 3;
             public int BaseIndex;
             public int StageCount => HasGeometryShader() ? 3 : 2;
 

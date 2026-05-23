@@ -7,6 +7,7 @@ using System.Reflection.PortableExecutable;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
+using static ShaderBuilderTool.UAMShaderCompiler;
 using static ShaderLibrary.SharcFile;
 
 namespace ShaderLibrary
@@ -43,7 +44,7 @@ namespace ShaderLibrary
         public class ShaderProgram
         {
             public int BaseIndex;
-            public int StageCount = 3;
+            public int Kind = 3;
             public string Name;
 
             public List<SharcFile.VariationMacro> VariationMacros = new();
@@ -52,10 +53,14 @@ namespace ShaderLibrary
                 => SharcUtils.GetVariationIndex(this.VariationMacros, options);
 
             public int GetBinaryIndex(int variation)
-                => BaseIndex + variation* StageCount;
+                => BaseIndex + variation * (HasGeometryShader() ? 3 : 2);
 
             public IEnumerable<Dictionary<string, string>> GetAllVariationCombinations()
                 => SharcUtils.GetAllVariationCombinations(this.VariationMacros);
+
+            public bool HasGeometryShader() => (Kind & 4) != 0;
+            public bool HasPixelShader() => (Kind & 2) != 0;
+            public bool HasVertexShader() => (Kind & 1) != 0;
         }
 
         public class VariationMacro
@@ -273,7 +278,7 @@ namespace ShaderLibrary
             {
                 ShaderProgram program = new();
                 uint NameLength = reader.ReadUInt32();
-                program.StageCount = reader.ReadInt32(); //3
+                program.Kind = reader.ReadInt32(); //3
                 program.BaseIndex = reader.ReadInt32();
                 program.Name = reader.ReadFixedString((int)NameLength);
                 program.VariationMacros = SharcReader.ReadSectionList(reader, sharc, SharcReader.ReadVariationMacro);
@@ -478,7 +483,7 @@ namespace ShaderLibrary
             static void WriteProgram(SharcfbFile.ShaderProgram program, BinaryDataWriter writer, SharcfbFile sharc)
             {
                 writer.Write((uint)(program.Name.Length + 1));
-                writer.Write((uint)program.StageCount);
+                writer.Write((uint)program.Kind);
                 writer.Write(program.BaseIndex);
                 writer.Write(Encoding.UTF8.GetBytes(program.Name));
                 writer.Write((byte)0);

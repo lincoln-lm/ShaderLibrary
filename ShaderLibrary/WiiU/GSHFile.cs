@@ -2,6 +2,7 @@
 using ShaderLibrary.Common;
 using ShaderLibrary.IO;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -85,7 +86,7 @@ namespace ShaderLibrary.WiiU
                 if (block.BlockType == BlockType.PixelShaderProgram)
                     currentShader.PixelData = data;
                 if (block.BlockType == BlockType.GeometryShaderProgram)
-                    currentShader.GeometryShData = data;
+                    currentShader.GeometryData = data;
 
                 Blocks.Add(new GX2Block()
                 {
@@ -110,13 +111,14 @@ namespace ShaderLibrary.WiiU
 
             public byte[] VertexData;
             public byte[] PixelData;
-            public byte[] GeometryShData;
+            public byte[] GeometryData;
 
             public byte[] SaveVertexData()
             {
                 var mem = new MemoryStream();
                 using (var writer = new BinaryDataWriter(mem))
                 {
+                    VertexHeader.align = true;
                     VertexHeader.DataSize = (uint)VertexData.Length;
                     VertexHeader.Write(writer);
                     writer.Write(VertexData);
@@ -129,9 +131,22 @@ namespace ShaderLibrary.WiiU
                 var mem = new MemoryStream();
                 using (var writer = new BinaryDataWriter(mem))
                 {
+                    PixelHeader.align = true;
                     PixelHeader.DataSize = (uint)VertexData.Length;
                     PixelHeader.Write(writer);
                     writer.Write(PixelData);
+                }
+                return mem.ToArray();
+            }
+            public byte[] SaveGeometryData()
+            {
+                var mem = new MemoryStream();
+                using (var writer = new BinaryDataWriter(mem))
+                {
+                    GeometryHeader.align = true;
+                    GeometryHeader.DataSize = (uint)VertexData.Length;
+                    GeometryHeader.Write(writer);
+                    writer.Write(GeometryData);
                 }
                 return mem.ToArray();
             }
@@ -170,9 +185,10 @@ namespace ShaderLibrary.WiiU
             public bool HasAttribute(string name) => this.Attributes.Any(x => x.Name == name);
             public bool HasUniform(string name) => this.Uniforms.Any(x => x.Name == name);
 
-            public GX2VertexHeader(Stream stream)
+            public GX2VertexHeader(Stream stream, bool bigEndian = true)
             {
-                Read(new BinaryDataReader(stream, true));
+                this.align = !bigEndian;
+                Read(new BinaryDataReader(stream, bigEndian));
             }
 
             public void Read(BinaryDataReader reader)
@@ -223,9 +239,10 @@ namespace ShaderLibrary.WiiU
 
             public void Write(BinaryDataWriter writer)
             {
+                writer.IsWiiU = true;
                 writer.WriteStruct(ShaderRegsHeader);
                 writer.Write(DataSize);
-                writer.Write(0);
+                var dataOffs = writer.SaveOffset();
                 writer.Write(Mode);
 
                 writer.Write(UniformBlocks.Count);
@@ -312,6 +329,10 @@ namespace ShaderLibrary.WiiU
                     writer.Write(b.Offset);
                     writer.Write(b.Value);
                 }
+
+                // Align for data at the end
+                writer.AlignBytes(512);
+                writer.WriteOffset(dataOffs);
             }
         }
 
@@ -321,7 +342,6 @@ namespace ShaderLibrary.WiiU
 
             public List<GX2UniformBlock> UniformBlocks = new List<GX2UniformBlock>();
             public List<GX2UniformVar> Uniforms = new List<GX2UniformVar>();
-            public List<GX2AttributeVar> Attributes = new List<GX2AttributeVar>();
             public List<GX2SamplerVar> Samplers = new List<GX2SamplerVar>();
             public List<GX2LoopVar> Loops = new List<GX2LoopVar>();
 
@@ -331,6 +351,7 @@ namespace ShaderLibrary.WiiU
             public uint[] StreamOutSize;
             public byte[] RBuffer = new byte[16];
             public uint DataSize;
+            public bool align;
 
             public byte[] GetRegs() // 19 uint regs
             {
@@ -344,12 +365,12 @@ namespace ShaderLibrary.WiiU
 
             public bool HasBlock(string name) => this.UniformBlocks.Any(x => x.Name == name);
             public bool HasSampler(string name) => this.Samplers.Any(x => x.Name == name);
-            public bool HasAttribute(string name) => this.Attributes.Any(x => x.Name == name);
             public bool HasUniform(string name) => this.Uniforms.Any(x => x.Name == name);
 
-            public GX2GeometryShaderHeader(Stream stream)
+            public GX2GeometryShaderHeader(Stream stream, bool bigEndian = true)
             {
-                Read(new BinaryDataReader(stream, true));
+                this.align = !bigEndian;
+                Read(new BinaryDataReader(stream, bigEndian));
             }
 
             public void Read(BinaryDataReader reader)
@@ -400,29 +421,88 @@ namespace ShaderLibrary.WiiU
             {
                 writer.WriteStruct(ShaderRegsHeader);
                 writer.Write(DataSize);
-                writer.Write(0);
+                var dataOffs = writer.SaveOffset();
                 writer.Write(0);
                 writer.Write(0);
                 writer.Write(Mode);
 
                 writer.Write(UniformBlocks.Count);
-                writer.Write(0); //offset for later
+                var uniformBlocksOffs = writer.SaveOffset();
                 writer.Write(Uniforms.Count);
-                writer.Write(0); //offset for later
+                var uniformVariablesOffs = writer.SaveOffset();
 
                 writer.Write(0);
                 writer.Write(0); 
 
                 writer.Write(Loops.Count);
-                writer.Write(0); //offset for later
+                var loopVariablesOffs = writer.SaveOffset();
 
                 writer.Write(Samplers.Count);
-                writer.Write(0); //offset
+                var samplerVariablesOffs = writer.SaveOffset();
 
                 writer.Write(RingSize);
                 writer.Write(hasStreamOut ? 1u : 0u);
                 writer.Write(StreamOutSize);
                 writer.Write(RBuffer);
+                writer.AlignBytes(4);
+
+                Dictionary<string, List<long>> stringTable = new();
+                void SaveString(string str)
+                {
+                    if (!stringTable.ContainsKey(str))
+                        stringTable.Add(str, new());
+                    stringTable[str].Add(writer.Position);
+                    writer.Write(0);
+                }
+
+                var mask = align ? 0xD0600000 : 0;
+
+                if (UniformBlocks.Count > 0)
+                    WriteOffset(writer, uniformBlocksOffs, mask);
+                foreach (var b in UniformBlocks)
+                {
+                    SaveString(b.Name);
+                    writer.Write(b.Offset);
+                    writer.Write(b.Size);
+                }
+                if (Uniforms.Count > 0)
+                    WriteOffset(writer, uniformVariablesOffs, mask);
+                foreach (var b in Uniforms)
+                {
+                    SaveString(b.Name);
+                    writer.Write((uint)b.Type);
+                    writer.Write(b.Count);
+                    writer.Write(b.Offset);
+                    writer.Write(b.BlockIndex);
+                }
+                if (Samplers.Count > 0)
+                    WriteOffset(writer, samplerVariablesOffs, mask);
+                foreach (var b in Samplers)
+                {
+                    SaveString(b.Name);
+                    writer.Write((uint)b.Type);
+                    writer.Write(b.Location);
+                }
+                // Apply strings
+                foreach (var str in stringTable)
+                {
+                    foreach (var pos in str.Value)
+                        WriteOffset(writer, pos, align ? 0xCA700000 : 0);
+
+                    writer.Write(Encoding.UTF8.GetBytes(str.Key));
+                    writer.Write((byte)0);
+                }
+                if (Loops.Count > 0)
+                    WriteOffset(writer, loopVariablesOffs, mask);
+                foreach (var b in Loops)
+                {
+                    writer.Write(b.Offset);
+                    writer.Write(b.Value);
+                }
+
+                // Align for data at the end
+                writer.AlignBytes(512);
+                writer.WriteOffset(dataOffs);
             }
         }
 
@@ -457,9 +537,10 @@ namespace ShaderLibrary.WiiU
             public bool HasUniform(string name) => this.Uniforms.Any(x => x.Name == name);
 
 
-            public GX2PixelHeader(Stream stream)
+            public GX2PixelHeader(Stream stream, bool bigEndian = true)
             {
-                Read(new BinaryDataReader(stream, true));
+                this.align = !bigEndian;
+                Read(new BinaryDataReader(stream, bigEndian));
             }
 
             public void Read(BinaryDataReader reader)
@@ -514,7 +595,7 @@ namespace ShaderLibrary.WiiU
 
                 writer.WriteStruct(ShaderRegsHeader);
                 writer.Write(DataSize);
-                writer.Write(0);
+                var dataOffs = writer.SaveOffset();
                 writer.Write(Mode);
 
                 writer.Write(UniformBlocks.Count);
@@ -599,6 +680,10 @@ namespace ShaderLibrary.WiiU
                     writer.Write(b.Offset);
                     writer.Write(b.Value);
                 }
+
+                // Align for data at the end
+                writer.AlignBytes(512);
+                writer.WriteOffset(dataOffs);
             }
         }
 
