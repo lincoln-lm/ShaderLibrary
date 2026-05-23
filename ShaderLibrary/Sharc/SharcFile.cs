@@ -12,10 +12,10 @@ namespace ShaderLibrary
         [StructLayout(LayoutKind.Sequential, Pack = 1)]
         public class Header
         {
-            public uint Magic; // "BAHS";
-            public uint Version;
+            public uint Magic = 1397244225; // "AAHS";
+            public uint Version = 10;
             public uint FileSize;
-            public uint ByteOrder; //0 or 1 for big endian
+            public uint ByteOrder = 1; // 0 for big, 1 for little
         }
 
         public class ShaderSource
@@ -147,7 +147,7 @@ namespace ShaderLibrary
             }
         }
 
-        public SharcFile() { }
+        public SharcFile() { FileHeader = new Header(); }
         public SharcFile(string filePath)
         {
             using (var reader = new BinaryDataReader(File.OpenRead(filePath)))

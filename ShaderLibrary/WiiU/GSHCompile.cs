@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -10,8 +11,10 @@ namespace ShaderLibrary.WiiU
 {
     public class GSHCompile
     {
-        public static string GSH_PATH = "gshCompile.exe";
-        public static string OUTPUT_PATH = "temp.gsh";
+        static string _exeFolder => AppContext.BaseDirectory;
+
+        public static string GSH_PATH = Path.Combine(_exeFolder, "gshCompile.exe");
+        public static string OUTPUT_PATH = Path.Combine(_exeFolder, "temp.gsh");
 
         public GSHCompile()
         {
@@ -41,9 +44,9 @@ namespace ShaderLibrary.WiiU
 
         public static byte[] CompileStages(string vertex, string fragment, string geometry) 
         {
-            string vsh_path = "temp.vert";
-            string fsh_path = "temp.frag";
-            string gsh_path = "temp.geom";
+            string vsh_path = Path.Combine(_exeFolder, "temp.vert");
+            string fsh_path = Path.Combine(_exeFolder, "temp.frag");
+            string gsh_path = Path.Combine(_exeFolder, "temp.geom");
 
             if (File.Exists(OUTPUT_PATH)) File.Delete(OUTPUT_PATH);
 
@@ -105,6 +108,11 @@ namespace ShaderLibrary.WiiU
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
+                info.FileName = "wine";
+                info.Arguments += $"\"{exec}\" ";
+            }
 
             Process cmd = new Process();
             cmd.StartInfo = info;
