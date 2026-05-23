@@ -111,6 +111,30 @@ namespace ShaderLibrary.WiiU
             public byte[] VertexData;
             public byte[] PixelData;
             public byte[] GeometryShData;
+
+            public byte[] SaveVertexData()
+            {
+                var mem = new MemoryStream();
+                using (var writer = new BinaryDataWriter(mem))
+                {
+                    VertexHeader.DataSize = (uint)VertexData.Length;
+                    VertexHeader.Write(writer);
+                    writer.Write(VertexData);
+                }
+                return mem.ToArray();
+            }
+
+            public byte[] SavePixelData()
+            {
+                var mem = new MemoryStream();
+                using (var writer = new BinaryDataWriter(mem))
+                {
+                    PixelHeader.DataSize = (uint)VertexData.Length;
+                    PixelHeader.Write(writer);
+                    writer.Write(PixelData);
+                }
+                return mem.ToArray();
+            }
         }
 
         public class GX2VertexHeader
@@ -127,8 +151,10 @@ namespace ShaderLibrary.WiiU
 
             public uint Mode = 1;
 
-            public bool hasStreamOut;
+            public bool HasStreamOut;
             public uint StreamOutSize;
+
+            public bool align;
 
             public byte[] GetRegs()
             {
@@ -138,6 +164,11 @@ namespace ShaderLibrary.WiiU
                 }
                 return mem.ToArray();
             }
+
+            public bool HasBlock(string name) => this.UniformBlocks.Any(x => x.Name == name);
+            public bool HasSampler(string name) => this.Samplers.Any(x => x.Name == name);
+            public bool HasAttribute(string name) => this.Attributes.Any(x => x.Name == name);
+            public bool HasUniform(string name) => this.Uniforms.Any(x => x.Name == name);
 
             public GX2VertexHeader(Stream stream)
             {
@@ -166,7 +197,7 @@ namespace ShaderLibrary.WiiU
                 uint samplerVarsOffset = reader.ReadUInt32() & ~0xD0600000;
                 uint attribVarCount = reader.ReadUInt32();
                 uint attribVarsOffset = reader.ReadUInt32() & ~0xD0600000;
-                hasStreamOut = reader.ReadBoolean();
+                HasStreamOut = reader.ReadBoolean();
                 StreamOutSize = reader.ReadUInt32();
 
                 reader.SeekBegin(uniformVarsOffset);
@@ -198,25 +229,89 @@ namespace ShaderLibrary.WiiU
                 writer.Write(Mode);
 
                 writer.Write(UniformBlocks.Count);
-                writer.Write(0); //offset for later
+                var uniformBlocksOffs = writer.SaveOffset();
                 writer.Write(Uniforms.Count);
-                writer.Write(0); //offset for later
-
+                var uniformVariablesOffs = writer.SaveOffset();
                 writer.Write(0);
-                writer.Write(0); 
+                writer.Write(0);
 
                 writer.Write(Loops.Count);
-                writer.Write(0); //offset for later
+                var loopVariablesOffs = writer.SaveOffset();
 
                 writer.Write(Samplers.Count);
-                writer.Write(0); //offset for later
+                var samplerVariablesOffs = writer.SaveOffset();
 
                 writer.Write(Attributes.Count);
-                writer.Write(0); //offset for later
+                var attribVariablesOffs = writer.SaveOffset();
 
-                writer.Write(hasStreamOut);
+                writer.Write(HasStreamOut);
                 writer.Write(StreamOutSize);
                 writer.AlignBytes(4);
+
+                Dictionary<string, List<long>> stringTable = new();
+                void SaveString(string str)
+                {
+                    if (!stringTable.ContainsKey(str))
+                        stringTable.Add(str, new());
+                    stringTable[str].Add(writer.Position);
+                    writer.Write(0);
+                }
+
+                var mask = align ? 0xD0600000 : 0;
+
+                if (UniformBlocks.Count > 0)
+                    WriteOffset(writer, uniformBlocksOffs, mask);
+                foreach (var b in UniformBlocks)
+                {
+                    SaveString(b.Name);
+                    writer.Write(b.Offset);
+                    writer.Write(b.Size);
+                }
+                if (Uniforms.Count > 0)
+                    WriteOffset(writer, uniformVariablesOffs, mask);
+                foreach (var b in Uniforms)
+                {
+                    SaveString(b.Name);
+                    writer.Write((uint)b.Type);
+                    writer.Write(b.Count);
+                    writer.Write(b.Offset);
+                    writer.Write(b.BlockIndex);
+                }
+                if (Samplers.Count > 0)
+                    WriteOffset(writer, samplerVariablesOffs, mask);
+                foreach (var b in Samplers)
+                {
+                    SaveString(b.Name);
+                    writer.Write((uint)b.Type);
+                    writer.Write(b.Location);
+                }
+                if (Attributes.Count > 0)
+                    WriteOffset(writer, attribVariablesOffs, mask);
+                foreach (var b in Attributes)
+                {
+                    SaveString(b.Name);
+                    writer.Write((uint)b.Type);
+                    writer.Write(b.Count);
+                    writer.Write(b.Location);
+                }
+
+                // Apply strings
+                foreach (var str in stringTable)
+                {
+                    foreach (var pos in str.Value)
+                        WriteOffset(writer, pos, align ? 0xCA700000 : 0);
+
+                    writer.Write(Encoding.UTF8.GetBytes(str.Key));
+                    writer.Write((byte)0);
+                }
+
+                if (Loops.Count > 0)
+                    WriteOffset(writer, loopVariablesOffs, mask);
+                foreach (var b in Loops)
+                {
+                    writer.Write(b.Offset);
+                    writer.Write(b.Value);
+                }
             }
         }
 
@@ -246,6 +341,11 @@ namespace ShaderLibrary.WiiU
                 }
                 return mem.ToArray();
             }
+
+            public bool HasBlock(string name) => this.UniformBlocks.Any(x => x.Name == name);
+            public bool HasSampler(string name) => this.Samplers.Any(x => x.Name == name);
+            public bool HasAttribute(string name) => this.Attributes.Any(x => x.Name == name);
+            public bool HasUniform(string name) => this.Uniforms.Any(x => x.Name == name);
 
             public GX2GeometryShaderHeader(Stream stream)
             {
@@ -337,6 +437,10 @@ namespace ShaderLibrary.WiiU
             public List<GX2LoopVar> Loops = new List<GX2LoopVar>();
 
             public uint Mode = 1;
+            public uint DataSize;
+            public byte HasStreamOut;
+            public uint StreamOutSize;
+            public bool align;
 
             public byte[] GetRegs()
             {
@@ -346,6 +450,12 @@ namespace ShaderLibrary.WiiU
                 }
                 return mem.ToArray();
             }
+
+            public bool HasBlock(string name) => this.UniformBlocks.Any(x => x.Name == name);
+            public bool HasSampler(string name) => this.Samplers.Any(x => x.Name == name);
+            public bool HasAttribute(string name) => this.Attributes.Any(x => x.Name == name);
+            public bool HasUniform(string name) => this.Uniforms.Any(x => x.Name == name);
+
 
             public GX2PixelHeader(Stream stream)
             {
@@ -357,7 +467,7 @@ namespace ShaderLibrary.WiiU
                 long pos = reader.Position;
                 ShaderRegsHeader = reader.ReadStruct<GX2PixelShaderStuct>();
 
-                uint size = reader.ReadUInt32();
+                DataSize = reader.ReadUInt32();
                 uint dataOffset = reader.ReadUInt32();
 
                 Mode = reader.ReadUInt32();
@@ -374,8 +484,8 @@ namespace ShaderLibrary.WiiU
                 uint samplerVarsOffset = reader.ReadUInt32() & ~0xD0600000;
                 uint attribVarCount = reader.ReadUInt32();
                 uint attribVarsOffset = reader.ReadUInt32() & ~0xD0600000;
-                byte hasStreamOut = reader.ReadByte();
-                uint streamOutStride = reader.ReadUInt32();
+                HasStreamOut = reader.ReadByte();
+                StreamOutSize = reader.ReadUInt32();
 
                 reader.SeekBegin(uniformVarsOffset);
                 for (int i = 0; i < uniformVarCount; i++)
@@ -396,6 +506,110 @@ namespace ShaderLibrary.WiiU
                 reader.SeekBegin(loopVarsOffset);
                 for (int i = 0; i < loopVarCount; i++)
                     Loops.Add(new GX2LoopVar(reader));
+            }
+
+            public void Write(BinaryDataWriter writer)
+            {
+                writer.IsWiiU = true;
+
+                writer.WriteStruct(ShaderRegsHeader);
+                writer.Write(DataSize);
+                writer.Write(0);
+                writer.Write(Mode);
+
+                writer.Write(UniformBlocks.Count);
+                var uniformBlocksOffs = writer.SaveOffset();
+                writer.Write(Uniforms.Count);
+                var uniformVariablesOffs = writer.SaveOffset();
+                writer.Write(0);
+                writer.Write(0); 
+
+                writer.Write(Loops.Count);
+                var loopVariablesOffs = writer.SaveOffset();
+
+                writer.Write(Samplers.Count);
+                var samplerVariablesOffs = writer.SaveOffset();
+
+                writer.Write(Attributes.Count);
+                var attribVariablesOffs = writer.SaveOffset();
+
+                writer.Write(HasStreamOut);
+                writer.Write(StreamOutSize);
+                writer.AlignBytes(4);
+
+                Dictionary<string, List<long>> stringTable = new();
+                void SaveString(string str)
+                {
+                    if (!stringTable.ContainsKey(str))
+                        stringTable.Add(str, new());
+                    stringTable[str].Add(writer.Position);
+                    writer.Write(0);
+                }
+
+                var mask = align ? 0xD0600000 : 0;
+
+                if (UniformBlocks.Count > 0)
+                    WriteOffset(writer, uniformBlocksOffs, mask);
+                foreach (var b in UniformBlocks)
+                {
+                    SaveString(b.Name);
+                    writer.Write(b.Offset);
+                    writer.Write(b.Size);
+                }
+                if (Uniforms.Count > 0)
+                    WriteOffset(writer, uniformVariablesOffs, mask);
+                foreach (var b in Uniforms)
+                {
+                    SaveString(b.Name);
+                    writer.Write((uint)b.Type);
+                    writer.Write(b.Count);
+                    writer.Write(b.Offset);
+                    writer.Write(b.BlockIndex);
+                }
+                if (Samplers.Count > 0)
+                    WriteOffset(writer, samplerVariablesOffs, mask);
+                foreach (var b in Samplers)
+                {
+                    SaveString(b.Name);
+                    writer.Write((uint)b.Type);
+                    writer.Write(b.Location);
+                }
+                if (Attributes.Count > 0)
+                    WriteOffset(writer, attribVariablesOffs, mask);
+                foreach (var b in Attributes)
+                {
+                    SaveString(b.Name);
+                    writer.Write((uint)b.Type);
+                    writer.Write(b.Count);
+                    writer.Write(b.Location);
+                }
+                // Apply strings
+                foreach (var str in stringTable)
+                {
+                    foreach (var pos in str.Value)
+                        WriteOffset(writer, pos, align ? 0xCA700000 : 0); 
+
+                    writer.Write(Encoding.UTF8.GetBytes(str.Key));
+                    writer.Write((byte)0);
+                }
+                if (Loops.Count > 0)
+                    WriteOffset(writer, loopVariablesOffs, mask);
+                foreach (var b in Loops)
+                {
+                    writer.Write(b.Offset);
+                    writer.Write(b.Value);
+                }
+            }
+        }
+
+        static void WriteOffset(BinaryDataWriter writer, long target, uint mask)
+        {
+            var pos = writer.Position;
+            if (mask != 0)
+                pos |= mask;
+
+            using (writer.BaseStream.TemporarySeek(target, SeekOrigin.Begin)) {
+                writer.Write((uint)pos);
             }
         }
 

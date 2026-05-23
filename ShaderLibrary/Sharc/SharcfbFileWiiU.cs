@@ -11,12 +11,12 @@ namespace ShaderLibrary
         [StructLayout(LayoutKind.Sequential, Pack = 1)]
         public class Header
         {
-            public uint Magic; // "BAHS";
-            public uint Version;
+            public uint Magic = 1397244226; // "BAHS";
+            public uint Version = 8;
             public uint FileSize;
-            public uint ByteOrder; //0 or 1 for big endian
+            public uint ByteOrder = 1; //0 or 1 for big endian
             public uint Zero;
-        }
+        }   
 
         public class ShaderBinary
         {
@@ -33,10 +33,10 @@ namespace ShaderLibrary
 
             public List<SharcFile.VariationMacro> VariationMacros = new();
             public List<SharcFile.VariationMacro> VariationDefaults = new();
-            public List<Symbol> Uniforms = new List<Symbol>();
-            public List<Symbol> UniformBlocks = new List<Symbol>();
-            public List<Symbol> Samplers = new List<Symbol>();
-            public List<Symbol> Attributes = new List<Symbol>();
+            public List<SharcFile.Symbol> Uniforms = new();
+            public List<SharcFile.Symbol> UniformBlocks = new();
+            public List<SharcFile.Symbol> Samplers = new();
+            public List<SharcFile.Symbol> Attributes = new();
 
             public int GetBinaryIndex(Dictionary<string, string> options)
             {
@@ -85,6 +85,11 @@ namespace ShaderLibrary
 
         public bool IsSwitch = false;
 
+        public SharcfbFileWiiU() {
+            this.FileHeader = new Header()
+            {
+            };
+        }
         public SharcfbFileWiiU(string filePath) {
             using (var reader = new BinaryDataReader(File.OpenRead(filePath)))
                 SharcfbV1Reader.Read(this, reader);
@@ -165,9 +170,9 @@ namespace ShaderLibrary
                 return program;
             }
 
-            static Symbol ReadSymbol(BinaryDataReader reader, ISharcFile sharc)
+            static SharcFile.Symbol ReadSymbol(BinaryDataReader reader, ISharcFile sharc)
             {
-                Symbol var = new();
+                SharcFile.Symbol var = new();
                 var.Size = reader.ReadUInt32();
                 uint variableNameLength = reader.ReadUInt32();
                 uint symbolNameLength = reader.ReadUInt32();
@@ -238,7 +243,7 @@ namespace ShaderLibrary
                 });
             }
 
-            static void WriteSymbols(List<SharcfbFileWiiU.Symbol> symbols, BinaryDataWriter writer, SharcfbFileWiiU sharc)
+            static void WriteSymbols(List<SharcFile.Symbol> symbols, BinaryDataWriter writer, SharcfbFileWiiU sharc)
             {
                 WriteSection(writer, sharc, (wr, s) =>
                 {
@@ -263,7 +268,7 @@ namespace ShaderLibrary
                 }
                 writer.Write(macro.Data);
             }
-            static void WriteSymbol(SharcfbFileWiiU.Symbol symbol, BinaryWriter writer, SharcfbFileWiiU sharc)
+            static void WriteSymbol(SharcFile.Symbol symbol, BinaryWriter writer, SharcfbFileWiiU sharc)
             {
                 writer.Write(symbol.Size);
 

@@ -3,6 +3,7 @@ using ShaderLibrary.IO;
 using ShaderLibrary.Sharc;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Xml.Serialization;
 
 namespace ShaderLibrary
 {
@@ -48,7 +49,9 @@ namespace ShaderLibrary
 
         public class MacroDefine
         {
+            [XmlAttribute("name")]
             public string Name;
+            [XmlAttribute("value")]
             public string Value;
         }
 
@@ -85,28 +88,43 @@ namespace ShaderLibrary
 
         public class VariationMacro
         {
+            [XmlAttribute("name")]
             public string Name { get; set; }
+            [XmlAttribute("values")]
             public List<string> Values { get; set; } = new List<string>();
+            [XmlAttribute("symbol")]
             public byte[] Data { get; set; }
         }
 
         public class Symbol
         {
+            [XmlAttribute("offset")]
             public uint Offset;
+            [XmlAttribute("size")]
             public uint Size;
+            [XmlAttribute("name")]
             public string Name;
+            [XmlAttribute("symbol")]
             public string SymbolName;
+            [XmlAttribute("values")]
             public List<string> Values = new();
+            [XmlElement("default_data")]
             public byte[] DefaultData;
+            [XmlElement("used_variants")]
             public byte[] UsedVariants;
         }
         public class SymbolUniformBlock
         {
+            [XmlAttribute("name")]
             public string Name;
+            [XmlAttribute("location")]
             public int Location;
+            [XmlAttribute("size")]
             public uint Size;
 
             // For sharc
+            [XmlArray("uniforms")]
+            [XmlArrayItem("uniform")]
             public List<Symbol> Uniforms = new();
         }
 
