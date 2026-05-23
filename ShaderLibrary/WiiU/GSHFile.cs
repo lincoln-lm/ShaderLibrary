@@ -1,7 +1,6 @@
 ﻿using BfshaLibrary.WiiU;
 using ShaderLibrary.Common;
 using ShaderLibrary.IO;
-using Silk.NET.OpenGL;
 using System;
 using System.Collections.Generic;
 using System.Linq;

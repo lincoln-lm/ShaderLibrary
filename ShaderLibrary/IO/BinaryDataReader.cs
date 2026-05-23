@@ -76,6 +76,11 @@ namespace ShaderLibrary.IO
             }
         }
 
+        public string ReadFixedString(int length)
+        {
+            var bytes = this.ReadBytes(length);
+            return Encoding.UTF8.GetString(bytes).Trim('\0');
+        }
 
         public sbyte[] ReadSbytes(int count)
         {

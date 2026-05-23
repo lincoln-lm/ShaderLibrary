@@ -5,7 +5,6 @@ using ShaderLibrary.Helpers;
 using ShaderLibrary.IO;
 using ShaderLibrary.Switch;
 using ShaderLibrary.WiiU;
-using Silk.NET.OpenGL;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -312,120 +311,6 @@ namespace ShaderLibrary
             return indices;
         }
 
-        public void CreateAddNewShaderProgram(BnshFile.ShaderVariation variation,
-            Dictionary<string, string> options, 
-            GLSLCompile glslShaderVert, GLSLCompile glslShaderFrag)
-        {
-            // Add variation
-            if (!this.BnshFile.Variations.Contains(variation))
-                this.BnshFile.Variations.Add(variation);
-
-            var program = new BfshaShaderProgram();
-            program.VariationIndex = this.BnshFile.Variations.IndexOf(variation);
-
-            // Set locations
-            for (int i = 0; i < this.Samplers.Count; i++)
-                program.SamplerIndices.Add(new ShaderIndexHeader()
-                {
-                    VertexLocation = glslShaderVert.GetSamplerLocation(this.Samplers.GetKey(i)),
-                    FragmentLocation = glslShaderFrag.GetSamplerLocation(this.Samplers.GetKey(i)),
-                });
-
-            for (int i = 0; i < this.UniformBlocks.Count; i++)
-                program.UniformBlockIndices.Add(new ShaderIndexHeader()
-                {
-                    VertexLocation = glslShaderVert.GetUniformBlockLocation(this.UniformBlocks.GetKey(i)),
-                    FragmentLocation = glslShaderFrag.GetUniformBlockLocation(this.UniformBlocks.GetKey(i)),
-                });
-
-            for (int i = 0; i < this.StorageBuffers.Count; i++)
-                program.StorageBufferIndices.Add(new ShaderIndexHeader()
-                {
-                    VertexLocation = glslShaderVert.GetStorageBufferLocation(this.StorageBuffers.GetKey(i)),
-                    FragmentLocation = glslShaderFrag.GetStorageBufferLocation(this.StorageBuffers.GetKey(i)),
-                });
-
-            for (int i = 0; i < this.Attributes.Count; i++)
-                program.SetAttribute(i, glslShaderVert.HasAttribute(this.Attributes.GetKey(i)));
-
-            for (int i = 0; i < this.UniformBlocks.Count; i++)
-                Console.WriteLine($"{this.UniformBlocks.GetKey(i)} {program.UniformBlockIndices[i].VertexLocation}");
-            for (int i = 0; i < this.UniformBlocks.Count; i++)
-                Console.WriteLine($"{this.UniformBlocks.GetKey(i)} {program.UniformBlockIndices[i].FragmentLocation}");
-
-            for (int i = 0; i < this.Samplers.Count; i++)
-                Console.WriteLine($"{this.Samplers.GetKey(i)} {program.SamplerIndices[i].FragmentLocation}");
-
-            for (int i = 0; i < this.Attributes.Count; i++)
-                Console.WriteLine($"{this.Attributes.GetKey(i)} {program.IsAttributeUsed(i)}");
-
-            //expand key table
-            int[] program_keys = new int[this.StaticKeyLength + this.DynamicKeyLength];
-            KeyTable = KeyTable.Concat(program_keys).ToArray();
-
-            // Add program
-            var programIndex = this.Programs.Count;
-            this.Programs.Add(program);
-
-            //Set option combinations required to use the program
-            SetProgramOptions(programIndex, options);
-        }
-
-        public void CreateAddNewShaderProgramWiiU(BfshaShaderProgram program, Dictionary<string, string> options)
-        {
-            //expand key table
-            int[] program_keys = new int[this.StaticKeyLength + this.DynamicKeyLength];
-            KeyTable = KeyTable.Concat(program_keys).ToArray();
-
-            var programIndex = this.Programs.Count;
-            this.Programs.Add(program);
-
-            //Set option combinations required to use the program
-            SetProgramOptions(programIndex, options);
-        }
-
-        public void SetProgramOptions(int programIndex, Dictionary<string, string> options)
-        {
-            foreach (var staticOption in StaticOptions.Values)
-            {
-                string choice = staticOption.DefaultChoice;
-
-                if (options.ContainsKey(staticOption.Name))
-                    choice = options[staticOption.Name];
-
-                SetOptionKey(staticOption, choice, programIndex); 
-            }
-            foreach (var dynamicOption in DynamicOptions.Values)
-            {
-                string choice = dynamicOption.DefaultChoice;
-
-                if (options.ContainsKey(dynamicOption.Name))
-                    choice = options[dynamicOption.Name];
-
-                SetOptionKey(dynamicOption, choice, programIndex);
-            }
-        }
-
-        public void SetOptionKey(ShaderOption option, string choice, int programIdx)
-        {
-            //The amount of keys used per program
-            int numKeysPerProgram = this.StaticKeyLength + this.DynamicKeyLength;
-
-            //Static key (total * program index)
-            int baseIndex = numKeysPerProgram * programIdx;
-            //current choice
-            int choiceIndex = option.Choices.Keys.ToList().IndexOf(choice);
-            if (choiceIndex == -1)
-                throw new Exception($"Invalid choice input ({choice}) for {option.Name}!");
-
-            int key_idx = baseIndex + option.Bit32Index;
-
-            option.SetKey(ref this.KeyTable[key_idx], choiceIndex);
-
-            var new_choiceIdx = option.GetChoiceIndex(this.KeyTable[key_idx]);
-            if (new_choiceIdx != choiceIndex)
-                throw new Exception("Failed to set choice index!");
-        }
 
         /// <summary>
         /// Prints specificed program keys from the given index.

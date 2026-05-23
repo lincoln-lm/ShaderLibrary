@@ -63,6 +63,11 @@ namespace ShaderLibrary
         public byte[] EndPadding = new byte[0x60];
         public byte[] GLAssembly = new byte[0];
 
+        public uint GetByteCodeSize()
+        {
+            return (uint)(ShaderSize);
+        }
+
         public ControlShader()
         {
             Unknowns[0] = 48;
@@ -141,8 +146,8 @@ namespace ShaderLibrary
                 NumBarriers = reader.ReadUInt32(),
             };
 
-            EndPadding = reader.ReadBytes((int)(GlasmOffset - reader.BaseStream.Position));
-            GLAssembly = reader.ReadBytes((int)GlasmSize);
+            EndPadding = reader.ReadBytes((int)(reader.BaseStream.Length - reader.BaseStream.Position));
+            //GLAssembly = reader.ReadBytes((int)GlasmSize);
 
             var end = reader.BaseStream.Position;
         }
@@ -209,9 +214,7 @@ namespace ShaderLibrary
             writer.Write(ShaderComp.CrsSz);
             writer.Write(ShaderComp.NumBarriers);
             writer.Write(EndPadding);
-
             writer.Write(GLAssembly);
-            writer.Write(0);
         }
 
         public float[] GetConstantsAsFloats(byte[] shader_code)
