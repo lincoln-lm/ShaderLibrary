@@ -7,7 +7,7 @@ using System.Text;
 
 namespace ShaderLibrary
 {
-    public class SharcFile
+    public class SharcFile : ISharcFile
     {
         [StructLayout(LayoutKind.Sequential, Pack = 1)]
         public class Header
@@ -153,6 +153,8 @@ namespace ShaderLibrary
         public string Name;
 
         public bool IsSwitch = false;
+
+        public uint GetVersion() => this.FileHeader.Version;
 
         public static bool Identify(Stream stream)
         {

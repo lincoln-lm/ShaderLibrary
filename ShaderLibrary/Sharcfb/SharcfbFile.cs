@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 
 namespace ShaderLibrary
 {
-    public class SharcfbFile
+    public class SharcfbFile : ISharcFile
     {
         [StructLayout(LayoutKind.Sequential, Pack = 1)]
         public class Header
@@ -36,7 +36,7 @@ namespace ShaderLibrary
             public List<Symbol> Samplers = new List<Symbol>();
             public List<Symbol> Buffers = new List<Symbol>();
             public List<Symbol> Uniforms = new List<Symbol>();
-            public List<SymbolUniformBlock> UniformBlocks = new List<SymbolUniformBlock>();
+            public List<SymbolUniformBlock> UniformBlocks = new();
         }
 
         public class ShaderProgram
@@ -45,7 +45,7 @@ namespace ShaderLibrary
             public int StageCount = 3;
             public string Name;
 
-            public List<VariationMacro> Macros = new List<VariationMacro>();
+            public List<SharcFile.VariationMacro> Macros = new();
 
             public int GetVariationIndex(Dictionary<string, string> options)
             {
@@ -169,6 +169,11 @@ namespace ShaderLibrary
             bool isAlignment = reader.ReadUInt32() >= 2048;
             reader.BaseStream.Position = 0;
             return isAlignment;
+        }
+
+        public uint GetVersion()
+        {
+            return this.FileHeader.Version;
         }
 
         public enum ShaderType

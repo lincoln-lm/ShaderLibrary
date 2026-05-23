@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 
 namespace ShaderLibrary
 {
-    public class SharcfbFileWiiU
+    public class SharcfbFileWiiU : ISharcFile
     {
         [StructLayout(LayoutKind.Sequential, Pack = 1)]
         public class Header
@@ -30,8 +30,8 @@ namespace ShaderLibrary
             public int BaseIndex;
             public int StageCount => HasGeometryShader() ? 3 : 2;
 
-            public List<VariationMacro> VariationMacros = new List<VariationMacro>();
-            public List<VariationMacro> VariationDefaults = new List<VariationMacro>();
+            public List<SharcFile.VariationMacro> VariationMacros = new();
+            public List<SharcFile.VariationMacro> VariationDefaults = new();
             public List<Symbol> Uniforms = new List<Symbol>();
             public List<Symbol> UniformBlocks = new List<Symbol>();
             public List<Symbol> Samplers = new List<Symbol>();
@@ -107,6 +107,11 @@ namespace ShaderLibrary
             using (var fs = new FileStream(filePath, FileMode.Create, FileAccess.Write))
             using (var wr = new BinaryDataWriter(fs))
                 SharcfbV1Writer.Write(this, wr);
+        }
+
+        public uint GetVersion()
+        {
+            return this.FileHeader.Version;
         }
 
         public enum GX2ShaderType

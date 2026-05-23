@@ -16,23 +16,23 @@ namespace ShaderLibrary.Sharc
             sharc.Name = reader.ReadZeroTerminatedString();
 
             reader.SeekBegin(STRING_TABLE_OFFSET + sharc.FileHeader.Alignment);
-            long startPos = reader.Position;
 
-            uint shaderVariationSectionSize = reader.ReadUInt32();
-            uint shaderVariationCount = reader.ReadUInt32();
+            SharcReader.ReadSection(reader, sharc, (r, s) =>
+            {
+                uint variationCount = reader.ReadUInt32();
+                for (int i = 0; i < variationCount; i++)
+                    sharc.Variations.Add(SharcReader.ReadSection(reader, sharc, ReadVariation));
+            });
 
-            for (int i = 0; i < shaderVariationCount; i++)
-                sharc.Variations.Add(ReadSection(reader, sharc, ReadVariation));
-
-            reader.SeekBegin(startPos + shaderVariationSectionSize);
-            uint shaderProgramSectionSize = reader.ReadUInt32();
-            uint shaderProgramCount = reader.ReadUInt32();
-
-            for (int i = 0; i < shaderProgramCount; i++)
-                sharc.Programs.Add(ReadSection(reader, sharc, ReadProgram));
+            SharcReader.ReadSection(reader, sharc, (r, s) =>
+            {
+                uint programCount = reader.ReadUInt32();
+                for (int i = 0; i < programCount; i++)
+                    sharc.Programs.Add(SharcReader.ReadSection(reader, sharc, ReadProgram));
+            });
         }
 
-        static ShaderVariation ReadVariation(BinaryDataReader reader, SharcfbFile sharc)
+        static ShaderVariation ReadVariation(BinaryDataReader reader, ISharcFile sharc)
         {
             ShaderVariation variation = new();
 
@@ -118,33 +118,24 @@ namespace ShaderLibrary.Sharc
 
             variation.ControlShader = bytes;
 
-            reader.SeekBegin(sharc.FileHeader.ShaderDataOffset + byteCodeOffset);
+            reader.SeekBegin(((SharcfbFile)sharc).FileHeader.ShaderDataOffset + byteCodeOffset);
             variation.ByteCode = reader.ReadBytes((int)controlShader.GetByteCodeSize());
 
             return variation;
         }
 
-        static ShaderProgram ReadProgram(BinaryDataReader reader, SharcfbFile sharc)
+        static ShaderProgram ReadProgram(BinaryDataReader reader, ISharcFile sharc)
         {
             ShaderProgram program = new();
             uint NameLength = reader.ReadUInt32();
             program.StageCount = reader.ReadInt32(); //3
             program.BaseIndex = reader.ReadInt32();
             program.Name = reader.ReadFixedString((int)NameLength);
-            program.Macros = ReadSection(reader, sharc, ReadMacroList);
+            program.Macros = SharcReader.ReadSectionList(reader, sharc, ReadVariationMacro);
             return program;
         }
 
-        static List<VariationMacro> ReadMacroList(BinaryDataReader reader, SharcfbFile sharc)
-        {
-            List<VariationMacro> macroList = new ();
-            uint count = reader.ReadUInt32();
-            for (int i = 0; i < count; i++)
-                macroList.Add(ReadSection(reader, sharc, ReadMacro));
-            return macroList;
-        }
-
-        static VariationMacro ReadMacro(BinaryDataReader reader, SharcfbFile sharc)
+        static VariationMacro ReadVariationMacro(BinaryDataReader reader, ISharcFile sharc)
         {
             VariationMacro var = new();
             uint nameLength = reader.ReadUInt32();
@@ -156,16 +147,6 @@ namespace ShaderLibrary.Sharc
                 var.Values.Add(reader.ReadZeroTerminatedString());
             var.Data = reader.ReadBytes((int)dataLength); // 0
             return var;
-        }
-
-        static T ReadSection<T>(BinaryDataReader reader, SharcfbFile sharc, Func<BinaryDataReader, SharcfbFile, T> section)
-        {
-            long start = reader.Position;
-            var sectionSize = reader.ReadUInt32();
-            T value = section.Invoke(reader, sharc);
-
-            reader.SeekBegin(start + sectionSize);
-            return value;
         }
 
         static string ReadString(BinaryDataReader reader)
