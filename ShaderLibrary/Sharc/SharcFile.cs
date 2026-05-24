@@ -13,7 +13,7 @@ namespace ShaderLibrary
         public class Header
         {
             public uint Magic = 1397244225; // "AAHS";
-            public uint Version = 10;
+            public uint Version = 13;
             public uint FileSize;
             public uint ByteOrder = 1; // 0 for big, 1 for little
         }
