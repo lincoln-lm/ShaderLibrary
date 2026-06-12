@@ -17,8 +17,6 @@ namespace ShaderBuilderTool
     /// </summary>
     public class UAMShaderCompiler
     {
-        static string _exeFolder => AppContext.BaseDirectory;
-        static string _folder => Path.Combine(_exeFolder, "tools");
 
         public enum Kind // Type names based on extension and argument for uam tool.
         {
@@ -36,35 +34,28 @@ namespace ShaderBuilderTool
         /// <param name="text"></param>
         /// <param name="kind"></param>
         /// <returns></returns>
-        public static ShaderOutput CompileByText(string text, Kind kind)
+        public static ShaderOutput CompileByText(string uamPath, string text, Kind kind)
         {
-            string inputFile = Path.Combine(_folder, "input.glsl");
+            string tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+            Directory.CreateDirectory(tempDir);
+            string inputFile = Path.Combine(tempDir, "input.glsl");
             File.WriteAllText(inputFile, text);
-            return Compile("input.glsl", kind);
-        }
-
-        public static ShaderOutput CompileByText(string text, Kind kind, Dictionary<string, string> macros)
-        {
-            string inputFile = Path.Combine(_folder, "input.glsl");
-            File.WriteAllText(inputFile,  GlslUtility.ApplyMacros(macros, text));
-            var compiled = Compile("input.glsl", kind);
-            try
-            {
-                File.Copy(inputFile, "test.glsl", true);
-            }
-            catch { }
-
-            File.Delete(inputFile);
+            var compiled = Compile(tempDir, uamPath, "input.glsl", kind);
+            Directory.Delete(tempDir, true);
             return compiled;
         }
 
-        static ShaderOutput Compile(string shadername, Kind kind)
+        public static ShaderOutput CompileByText(string uamPath, string text, Kind kind, Dictionary<string, string> macros)
         {
-            var exePath = Path.Combine(_folder, "uam.exe");
-            bool isSuccess = ExecuteCommand(exePath, $"--glslcbinds --nvnctrl=control.bin --nvngpu=program.bin -s {kind} {shadername}");
+            return CompileByText(uamPath, GlslUtility.ApplyMacros(macros, text), kind);
+        }
+
+        static ShaderOutput Compile(string folder, string uamPath, string shadername, Kind kind)
+        {
+            bool isSuccess = ExecuteCommand(folder, uamPath, $"--glslcbinds --nvnctrl=control.bin --nvngpu=program.bin -s {kind} {shadername}");
             // Ensure files output to correct directory
-            bool filesExist = File.Exists(Path.Combine(_folder, "program.bin")) && 
-                              File.Exists(Path.Combine(_folder, "control.bin"));
+            bool filesExist = File.Exists(Path.Combine(folder, "program.bin")) && 
+                              File.Exists(Path.Combine(folder, "control.bin"));
             if (!isSuccess || !filesExist)
             {
                 Console.ForegroundColor = ConsoleColor.Red;
@@ -74,16 +65,16 @@ namespace ShaderBuilderTool
             }
 
             // Raw binary and control shader
-            byte[] shader_bin  = File.ReadAllBytes(Path.Combine(_folder, "program.bin"));
-            byte[] control_bin = File.ReadAllBytes(Path.Combine(_folder, "control.bin"));
+            byte[] shader_bin  = File.ReadAllBytes(Path.Combine(folder, "program.bin"));
+            byte[] control_bin = File.ReadAllBytes(Path.Combine(folder, "control.bin"));
 
             // Symbol data should dump on the latest fork
             // Contains names and bind/location info for all the used uniform/input/output/sampler data
             var symbols = new ShaderSymbolData();
-            if (File.Exists(Path.Combine(_folder, $"symbols.{kind}.json")))
+            if (File.Exists(Path.Combine(folder, $"symbols.{kind}.json")))
             {
                 symbols = JsonSerializer.Deserialize<ShaderSymbolData>(
-                    File.ReadAllText(Path.Combine(_folder, $"symbols.{kind}.json")));
+                    File.ReadAllText(Path.Combine(folder, $"symbols.{kind}.json")));
             }
 
             foreach (var block in symbols.uniformBlocks)
@@ -100,25 +91,18 @@ namespace ShaderBuilderTool
             };
         }
 
-        static bool ExecuteCommand(string exePath, string arguments)
+        static bool ExecuteCommand(string folder, string exePath, string arguments)
         {
             var info = new ProcessStartInfo
             {
                 FileName = exePath,
                 Arguments = arguments,
-                WorkingDirectory = _folder, // ensure relative files resolve
+                WorkingDirectory = folder, // ensure relative files resolve
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
-            // Todo make a linux build to run natively
-            // https://github.com/KillzXGaming/uam/tree/nvn
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-            {
-                info.FileName = "wine";
-                info.Arguments += $"\"{exePath}\" ";
-            }
             Process cmd = new Process();
             cmd.StartInfo = info;
             cmd.OutputDataReceived += (sender, e) =>

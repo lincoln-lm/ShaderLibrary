@@ -8,7 +8,7 @@ namespace EffectLibraryTest
 {
     public class ShaderExtract
     {
-        public static void Export(BnshFile.ShaderCode shaderCode, string filePath)
+        public static void Export(ShaderLibrary.BnshFile.ShaderCode shaderCode, string filePath)
         {
             if (shaderCode == null)
                 return;
@@ -16,7 +16,7 @@ namespace EffectLibraryTest
             File.WriteAllText(filePath, GetCode(shaderCode));
         }
 
-        public static void Export(BnshFile.ShaderCode shaderCode, BnshFile.ShaderReflectionData reflect, string filePath)
+        public static void Export(ShaderLibrary.BnshFile.ShaderCode shaderCode, ShaderLibrary.BnshFile.ShaderReflectionData reflect, string filePath)
         {
             if (shaderCode == null)
                 return;
@@ -24,7 +24,7 @@ namespace EffectLibraryTest
             File.WriteAllText(filePath, GetCode(shaderCode, reflect));
         }
 
-        public static void ExportPreviewed(ShaderModel shader, BnshFile.ShaderCode shaderCode, BnshFile.ShaderReflectionData reflect, string filePath)
+        public static void ExportPreviewed(ShaderModel shader, ShaderLibrary.BnshFile.ShaderCode shaderCode, ShaderLibrary.BnshFile.ShaderReflectionData reflect, string filePath)
         {
             if (shaderCode == null)
                 return;
@@ -32,7 +32,7 @@ namespace EffectLibraryTest
             File.WriteAllText(filePath, ShaderLabelUtil.PreviewUniforms(GetCode(shaderCode, reflect), shader, reflect));
         }
 
-        public static void ExportPreviewed(string code, ShaderModel shader, BnshFile.ShaderCode shaderCode, BnshFile.ShaderReflectionData reflect, string filePath)
+        public static void ExportPreviewed(string code, ShaderModel shader, ShaderLibrary.BnshFile.ShaderCode shaderCode, ShaderLibrary.BnshFile.ShaderReflectionData reflect, string filePath)
         {
             if (shaderCode == null)
                 return;
@@ -45,6 +45,7 @@ namespace EffectLibraryTest
             //Apply the code to be usable with the UAM compiler
             code = ApplyConstants(code, constants);
             code = FixLocations(code);
+            code = FixEarlyReturns(code);
 
             if (reflect != null)
                 code = SetReflectionNames(code, reflect);
@@ -52,7 +53,7 @@ namespace EffectLibraryTest
             File.WriteAllText(filePath, ShaderLabelUtil.PreviewUniforms(code, shader, reflect));
         }
 
-        public static string GetCode(BnshFile.ShaderCode shaderCode, BnshFile.ShaderReflectionData reflect = null)
+        public static string GetCode(ShaderLibrary.BnshFile.ShaderCode shaderCode, ShaderLibrary.BnshFile.ShaderReflectionData reflect = null)
         {
             var control_code = new ControlShader(shaderCode.ControlCode);
 
@@ -62,6 +63,7 @@ namespace EffectLibraryTest
             //Apply the code to be usable with the UAM compiler
             code = ApplyConstants(code, constants);
             code = FixLocations(code);
+            code = FixEarlyReturns(code);
 
             if (reflect != null)
                 code = SetReflectionNames(code, reflect);
@@ -69,7 +71,7 @@ namespace EffectLibraryTest
             return code;
         }
 
-        static string SetReflectionNames(string code, BnshFile.ShaderReflectionData reflect)
+        static string SetReflectionNames(string code, ShaderLibrary.BnshFile.ShaderReflectionData reflect)
         {
             Dictionary<string, string> symbols = new Dictionary<string, string>();
             foreach (var sampler in reflect.Samplers.Keys)
@@ -93,8 +95,8 @@ namespace EffectLibraryTest
                 symbols.Add($"_fp_c{((location) + 3)}", $"_{name}");
                 symbols.Add($"_vp_c{((location) + 3)}", $"_{name}");
 
-                symbols.Add($"fp_c{((location) + 3)}_1", name);
-                symbols.Add($"vp_c{((location) + 3)}_1", name);
+                symbols.Add($"fp_c{((location) + 3)}", name);
+                symbols.Add($"vp_c{((location) + 3)}", name);
             }
 
             foreach (var name in reflect.Inputs.Keys)
@@ -211,13 +213,58 @@ namespace EffectLibraryTest
             return sb.ToString();
         }
 
+        static string FixEarlyReturns(string code)
+        {
+            var sb = new StringBuilder();
+            string line;
+            using (StringReader reader = new StringReader(code))
+            {
+                do
+                {
+                    line = reader.ReadLine();
+
+                    if (line != null)
+                    {
+                        if (line.Contains("void main()"))
+                        {
+                            line = line.Replace("void main()", "void main() { do");
+                        }
+                        if (line.Contains("break;"))
+                        {
+                            throw new Exception("Shader contains unsupported break");
+                        }
+                        if (line.Contains("return") && !line.Contains("return;"))
+                        {
+                            throw new Exception("Shader contains unsupported return");
+                        }
+                        if (line.Contains("return;"))
+                        {
+                            line = line.Replace("return;", "break;");
+                        }
+                        sb.AppendLine(line);
+                    } else {
+                        sb.Length -= Environment.NewLine.Length;
+
+                        sb.AppendLine(" while (false);");
+                        sb.AppendLine("}");
+                    }
+
+                } while (line != null);
+            }
+
+
+            return sb.ToString();
+        }
+
         static string ApplyConstants(string code, float[] constants)
         {
-            string blockName = "vp_c1_1._m0";
+            string fragBlockName = "fp_c1.data";
+            string vertBlockName = "vp_c1.data";
 
             Dictionary<string, float> constant_lookup = new Dictionary<string, float>();
 
             int index = 0;
+
             for (int i = 0; i < constants.Length;)
             {
                 string swizzle = "x";
@@ -231,8 +278,10 @@ namespace EffectLibraryTest
                     float value = constants[i];
 
                     //Expected variable name stored in the block
-                    string variable_name = $"{blockName}[{index}].{swizzle}";
-                    constant_lookup.Add(variable_name, value);
+                    string frag_variable_name = $"{fragBlockName}[{index}].{swizzle}";
+                    string vert_variable_name = $"{vertBlockName}[{index}].{swizzle}";
+                    constant_lookup.Add(frag_variable_name, value);
+                    constant_lookup.Add(vert_variable_name, value);
 
                     swizzle = SwizzleShift(swizzle);
 
@@ -244,6 +293,7 @@ namespace EffectLibraryTest
             }
 
             string line;
+            bool has_variable_constant_index = false;
 
             var sb = new StringBuilder();
             using (StringReader reader = new StringReader(code))
@@ -255,7 +305,7 @@ namespace EffectLibraryTest
                     if (line != null)
                     {
                         //swap variable with raw constant value
-                        if (line.Contains("vp_c1_1._m0"))
+                        if (line.Contains(fragBlockName) || line.Contains(vertBlockName))
                         {
                             //find variable and replace it
                             foreach (var var in constant_lookup)
@@ -264,15 +314,67 @@ namespace EffectLibraryTest
                                     line = line.Replace(var.Key, var.Value.ToString());
                             }
                         }
+                        // variable index into constant array
+                        if (line.Contains(fragBlockName) || line.Contains(vertBlockName)) {
+                            has_variable_constant_index = true;
+                        }
 
                         sb.AppendLine(line);
                     }
 
                 } while (line != null);
             }
+            code = sb.ToString();
 
+            if (has_variable_constant_index)
+            {
+                sb = new StringBuilder();
+                using (StringReader reader = new StringReader(code))
+                {
+                    do
+                    {
+                        line = reader.ReadLine();
 
-            return sb.ToString();
+                        if (line != null)
+                        {
+                            if (line.Contains("const int undef = 0;")) {
+                                sb.Append("const vec4 constants[] = vec4[](");
+                                for (int i = 0; i < constants.Length;)
+                                {
+                                    if (i > 0) sb.Append(", ");
+                                    sb.Append("vec4(");
+                                    for (int j = 0; j < 4; j++)
+                                    {
+                                        if (j > 0) sb.Append(", ");
+                                        if (constants.Length <= i) {
+                                            sb.Append("0.0");
+                                            continue;
+                                        }
+
+                                        float value = constants[i];
+                                        sb.Append(value.ToString());
+                                        i++;
+                                    }
+                                    sb.Append(")");
+                                    index++;
+                                }
+                                sb.AppendLine(");");
+                            }
+                            if (line.Contains(fragBlockName) || line.Contains(vertBlockName))
+                            {
+                                line = line.Replace(fragBlockName, "constants");
+                                line = line.Replace(vertBlockName, "constants");
+                            }
+
+                            sb.AppendLine(line);
+                        }
+
+                    } while (line != null);
+                }
+                code = sb.ToString();
+            }
+
+            return code;
         }
 
         static string SwizzleShift(string swizzle)
